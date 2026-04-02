@@ -3,32 +3,116 @@
 <head>
     <meta charset="utf-8">
     <title>Townscaper</title>
-    <base href="https://cdn.jsdelivr.net/gh/MonkeOnYT-glitch/GamesForSchoolNOTFORUSE@main/Townscaper/">
     <style>
-        body { margin: 0; overflow: hidden; background: #448199; font-family: sans-serif; color: white; }
-        canvas { width: 100vw; height: 100vh; display: block; }
-        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        body { margin: 0; padding: 0; background: #448199; overflow: hidden; font-family: 'Inter', sans-serif; color: white; }
+        #unity-canvas { width: 100vw; height: 100vh; display: block; }
+        #loading-ui { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,0.5); pointer-events: none; z-index: 10; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
+    
+    <script>
+        window.mergedBlobUrls = {};
+        window.assetsReady = false;
+        
+        // 1. Download and stitch the parts together
+        async function mergeSplitFile(fileUrlBase, numParts=2) {
+            const partUrls = Array.from({length:numParts}, (_,i) => `${fileUrlBase}.part${i+1}`);
+            try {
+                const responses = await Promise.all(partUrls.map(url => fetch(url)));
+                if(responses.some(r => !r.ok)) return null;
+                const parts = await Promise.all(responses.map(r => r.arrayBuffer()));
+                const combinedBlob = new Blob(parts, {type:'application/octet-stream'});
+                return URL.createObjectURL(combinedBlob);
+            } catch(error) { return null; }
+        }
+        
+        // 2. Intercept Unity's network requests and feed it the stitched file
+        function setupInterceptors() {
+            const originalFetch = window.fetch;
+            window.fetch = async function(...args) {
+                let url = args[0];
+                if (typeof url === 'string') {
+                    for(const [filename, blobUrl] of Object.entries(window.mergedBlobUrls)){
+                        if(url.includes(filename)){ args[0] = blobUrl; break; }
+                    }
+                }
+                if(!window.assetsReady){
+                    await new Promise(resolve => {
+                        const check = setInterval(()=>{
+                            if(window.assetsReady){ clearInterval(check); resolve(); }
+                        }, 50);
+                    });
+                }
+                return originalFetch.apply(this, args);
+            };
+            
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.open = function(method,url,...args){
+                let finalUrl = url;
+                for(const [filename, blobUrl] of Object.entries(window.mergedBlobUrls)){
+                    if(url.includes(filename)){ finalUrl = blobUrl; break; }
+                }
+                return originalOpen.call(this, method, finalUrl, ...args);
+            };
+            XMLHttpRequest.prototype.send = function(...args){
+                if(!window.assetsReady){
+                    const check = setInterval(()=>{
+                        if(window.assetsReady){
+                            clearInterval(check);
+                            originalSend.apply(this, args);
+                        }
+                    }, 50);
+                    return;
+                }
+                return originalSend.apply(this, args);
+            };
+        }
+        
+        // 3. Start the download process immediately
+        async function prepareGameAssets() {
+            setupInterceptors();
+            const blobUrl = await mergeSplitFile('WebGL.data', 2);
+            if(blobUrl) window.mergedBlobUrls['WebGL.data'] = blobUrl;
+            window.assetsReady = true;
+        }
+        prepareGameAssets();
+    </script>
 </head>
 <body>
-    <div id="loading"><h1>LOADING TOWNSCAPER...</h1><h2 id="progress">0%</h2></div>
     <canvas id="unity-canvas"></canvas>
+    <div id="loading-ui">
+        <div class="spinner" id="spinner"></div>
+        <div style="font-weight: 800; letter-spacing: 2px; font-size: 1.2rem;">ASSEMBLING TOWNSCAPER</div>
+        <div id="progress" style="margin-top: 10px; font-size: 1rem; color: #c084fc;">Downloading Parts...</div>
+    </div>
+    
     <script src="WebGL.loader.js"></script>
     <script>
-        createUnityInstance(document.querySelector("#unity-canvas"), {
-            dataUrl: "https://raw.githubusercontent.com/MonkeOnYT-glitch/GamesForSchoolNOTFORUSE/main/Townscaper/WebGL.data",
-            frameworkUrl: "WebGL.framework.js",
-            codeUrl: "WebGL.wasm",
-            companyName: "Oskar Stalberg",
-            productName: "Townscaper",
-            productVersion: "1.0",
-        }, (progress) => {
-            document.getElementById('progress').innerText = Math.floor(progress * 100) + "%";
-        }).then((unityInstance) => {
-            document.getElementById('loading').style.display = "none";
-        }).catch((err) => {
-            document.getElementById('progress').innerText = "ERROR LOADING GAME";
-        });
+        // 4. Wait for the stitching to finish, then boot Unity
+        const initCheck = setInterval(() => {
+            if (window.assetsReady && typeof createUnityInstance !== 'undefined') {
+                clearInterval(initCheck);
+                document.getElementById('progress').innerText = "Booting Engine...";
+                
+                createUnityInstance(document.querySelector("#unity-canvas"), {
+                    dataUrl: "WebGL.data",
+                    frameworkUrl: "WebGL.framework.js",
+                    codeUrl: "WebGL.wasm",
+                    companyName: "Oskar Stalberg",
+                    productName: "Townscaper",
+                    productVersion: "1.0",
+                }, (progress) => {
+                    document.getElementById('progress').innerText = Math.floor(progress * 100) + "%";
+                }).then((unityInstance) => {
+                    document.getElementById('loading-ui').style.display = "none";
+                }).catch((err) => {
+                    console.error(err);
+                    document.getElementById('progress').innerText = "ERROR";
+                });
+            }
+        }, 100);
     </script>
 </body>
 </html>
