@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8">
+    <title>Ragdoll Hit</title>
+    <base href="https://cdn.jsdelivr.net/gh/MonkeOnYT-glitch/GamesForSchoolNOTFORUSE@main/RagdollHit/">
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; color: white; }
+        canvas { width: 100vw; height: 100vh; display: block; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="loading"><h1 style="color:#ef4444;">LOADING RAGDOLL HIT...</h1><h2 id="progress" style="color:#ef4444;">0%</h2></div>
+    <canvas id="unity-canvas"></canvas>
+    <script src="ragdollhit.loader.js"></script>
+    <script>
+        createUnityInstance(document.querySelector("#unity-canvas"), {
+            dataUrl: "https://raw.githubusercontent.com/MonkeOnYT-glitch/GamesForSchoolNOTFORUSE/main/RagdollHit/ragdollhit.data.unityweb",
+            frameworkUrl: "ragdollhit.framework.js#.unityweb",
+            codeUrl: "ragdollhit.wasm#.unityweb",
+            companyName: "DefaultCompany",
+            productName: "Ragdoll Hit",
+            productVersion: "1.0",
+        }, (progress) => {
+            document.getElementById('progress').innerText = Math.floor(progress * 100) + "%";
+        }).then((unityInstance) => {
+            document.getElementById('loading').style.display = "none";
+        }).catch((err) => {
+            document.getElementById('progress').innerText = "ERROR LOADING GAME";
+        });
+    </script>
+</body>
+</html>
